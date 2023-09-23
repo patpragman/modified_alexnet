@@ -1,0 +1,166 @@
+import torch
+import torch.nn as nn
+import torch.optim as optim
+import wandb
+from datamodel import FloatImageDataset, train_test_split
+from torch.utils.data import DataLoader
+from train_test_suite import train_and_test_model
+from sklearn.metrics import classification_report
+import yaml
+from pprint import pprint
+
+SEED = 42  # for consistency - I want all of the models to get the same data
+
+
+# Define the architecture of the MLP for image classification
+class AlexNet(nn.Module):
+    """
+    https://blog.paperspace.com/alexnet-pytorch/
+
+    the majority of the implementation comes from here and is slightly modified for the different size
+    and readability.
+    """
+    def __init__(self, num_classes=2,  # we're doing binary classification, so no sense using all 10
+                 activation_function=nn.ReLU(),
+                 ):
+        super(AlexNet, self).__init__()
+        self.layer_1 = nn.Sequential(
+            nn.Conv2d(3, 96, kernel_size=11, stride=4, padding=0),
+            nn.BatchNorm2d(96),  # batch norm is a modification
+            activation_function,
+            nn.MaxPool2d(kernel_size=3, stride=2))
+        self.layer_2 = nn.Sequential(
+            nn.Conv2d(96, 256, kernel_size=5, stride=1, padding=2),
+            nn.BatchNorm2d(256),
+            activation_function,
+            nn.MaxPool2d(kernel_size=3, stride=2))
+        self.layer_3 = nn.Sequential(
+            nn.Conv2d(256, 384, kernel_size=3, stride=1, padding=1),
+            nn.BatchNorm2d(384),
+            activation_function)
+        self.layer_4 = nn.Sequential(
+            nn.Conv2d(384, 384, kernel_size=3, stride=1, padding=1),
+            nn.BatchNorm2d(384),
+            activation_function)
+        self.layer_5 = nn.Sequential(
+            nn.Conv2d(384, 256, kernel_size=3, stride=1, padding=1),
+            nn.BatchNorm2d(256),
+            activation_function,
+            nn.MaxPool2d(kernel_size=3, stride=2))
+        self.fully_connected_1 = nn.Sequential(
+            nn.Dropout(0.5),
+            nn.Linear(9216, 4096),
+            activation_function)
+        self.fully_connected_2 = nn.Sequential(
+            nn.Dropout(0.5),
+            nn.Linear(4096, 4096),
+            activation_function)
+        self.fully_connected_3 = nn.Sequential(
+            nn.Linear(4096, num_classes))
+
+    def forward(self, x):
+        x = self.layer_1(x)
+        x = self.layer_2(x)
+        x = self.layer_3(x)
+        x = self.layer_4(x)
+        x = self.layer_5(x)
+        # flatten here
+        x = torch.flatten(x)
+        x = self.fully_connected_1(x)
+        x = self.fully_connected_2(x)
+        x = self.fully_connected_3(x)
+
+        # now you can spit out the remaining x
+        return x
+
+
+with open("sweep.yml", "r") as yaml_file:
+    sweep_config = yaml.safe_load(yaml_file)
+
+sweep_id = wandb.sweep(sweep=sweep_config)
+
+
+def find_best_model():
+    # config for wandb
+
+    # Initialize wandb
+    wandb.init(project="AlexNet")
+    config = wandb.config
+
+    # creating the model stuff
+    input_size = config.input_size  # AlexNet only accepts 224 x 224 sized images
+    num_classes = 2  # this doesn't ever change either - we're doing binary classification
+    learning_rate = config.learning_rate
+    epochs = wandb.config.epochs
+    activation_function = nn.ReLU() if config.activation_function == "relu" else nn.LeakyReLU(0.01)
+
+    # Create the MLP-based image classifier model
+    model = AlexNet(input_size,
+                    num_classes,
+                    activation_function=activation_function)
+
+    print('HYPER PARAMETERS:')
+    pprint(config)
+    print('Model Architecture:')
+    print(model)
+
+    path = f"/home/patrickpragman/PycharmProjects/models/data_manufacturer/0.35_reduced_then_balanced/data_{config.input_size}"
+
+    dataset = FloatImageDataset(directory_path=path,
+                                true_folder_name="entangled", false_folder_name="not_entangled"
+                                )
+
+    training_dataset, testing_dataset = train_test_split(dataset, train_size=0.75, random_state=SEED)
+    batch_size = config.batch_size
+
+    # create the dataloaders
+    train_dataloader = DataLoader(training_dataset, batch_size=batch_size)
+    test_dataloader = DataLoader(testing_dataset, batch_size=batch_size)
+
+    # Define loss function
+    loss_fn = nn.CrossEntropyLoss()
+
+    # optimzer parsing logic:
+    if config.optimizer == "sgd":
+        optimizer = optim.SGD(model.parameters(), lr=learning_rate, momentum=0.9)
+    else:
+        optimizer = optim.Adam(model.parameters(), lr=learning_rate)
+
+    history = train_and_test_model(train_dataloader=train_dataloader, test_dataloader=test_dataloader,
+                                   model=model, loss_fn=loss_fn, optimizer=optimizer, epochs=epochs,
+                                   device="cpu", wandb=wandb, verbose=False)
+
+    y_true, y_pred = history['y_true'], history['y_pred']
+    print(classification_report(y_true=y_true, y_pred=y_pred))
+
+    # Log test accuracy to wandb
+
+    # Log hyperparameters to wandb
+    wandb.log(dict(config))
+
+
+if __name__ == "__main__":
+    wandb.agent(sweep_id, function=find_best_model)
+
+    # Specify your W&B project and sweep ID
+    project_name = "AlexNet"
+
+    # Fetch sweep runs
+    api = wandb.Api()
+    sweep = api.sweep(f"{project_name}/{sweep_id}")
+    runs = list(sweep.runs)
+
+    # Find the best run based on the metric you care about (e.g., lowest validation loss)
+    best_run = None
+    best_metric_value = float("inf")
+
+    for run in runs:
+        if run.summary["accuracy"] > best_metric_value:
+            best_run = run
+            best_metric_value = run.summary["accuracy"]
+
+    # Print the best run and its hyperparameters
+    print("Best Run:")
+    print(f"Run ID: {best_run.id}")
+    print(f"Test Accuracy: {best_run.summary['accuracy']}")
+    print(f"Hyperparameters: {best_run.config}")

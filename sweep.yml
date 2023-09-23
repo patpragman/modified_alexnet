@@ -1,0 +1,19 @@
+name: alexnet-hyperparam-sweep
+method: grid
+metric:
+  name: testing_loss
+  goal: minimize
+
+parameters:
+  input_size:
+    values: [224]
+  learning_rate:
+    values: [0.0001, 0.00001, 0.000001]
+  activation_function:
+    values: [relu, leaky_relu]
+  optimizer:
+    values: [sgd, adam]
+  epochs:
+    values: [40, 60]
+  batch_size:
+    values: [32]
