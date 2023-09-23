@@ -10,7 +10,7 @@ parameters:
   learning_rate:
     values: [0.0001, 0.00001, 0.000001]
   activation_function:
-    values: [relu, leaky_relu]
+    values: [relu, leaky_relu, tanh]
   optimizer:
     values: [sgd, adam]
   epochs:

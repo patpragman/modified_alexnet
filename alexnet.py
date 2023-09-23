@@ -21,40 +21,48 @@ class AlexNet(nn.Module):
     and readability.
     """
     def __init__(self, num_classes=2,  # we're doing binary classification, so no sense using all 10
-                 activation_function=nn.ReLU(),
+                 activation_function='relu',
                  ):
         super(AlexNet, self).__init__()
+
+        if activation_function.lower() == "relu":
+            fn = nn.ReLU()
+        elif activation_function.lower == "leaky_relu":
+            fn = nn.LeakyReLU(0.1)
+        else:
+            fn = nn.Tanh()
+
         self.layer_1 = nn.Sequential(
             nn.Conv2d(3, 96, kernel_size=11, stride=4, padding=0),
             nn.BatchNorm2d(96),  # batch norm is a modification
-            activation_function,
+            fn,
             nn.MaxPool2d(kernel_size=3, stride=2))
         self.layer_2 = nn.Sequential(
             nn.Conv2d(96, 256, kernel_size=5, stride=1, padding=2),
             nn.BatchNorm2d(256),
-            activation_function,
+            fn,
             nn.MaxPool2d(kernel_size=3, stride=2))
         self.layer_3 = nn.Sequential(
             nn.Conv2d(256, 384, kernel_size=3, stride=1, padding=1),
             nn.BatchNorm2d(384),
-            activation_function)
+            fn)
         self.layer_4 = nn.Sequential(
             nn.Conv2d(384, 384, kernel_size=3, stride=1, padding=1),
             nn.BatchNorm2d(384),
-            activation_function)
+            fn)
         self.layer_5 = nn.Sequential(
             nn.Conv2d(384, 256, kernel_size=3, stride=1, padding=1),
             nn.BatchNorm2d(256),
-            activation_function,
+            fn,
             nn.MaxPool2d(kernel_size=3, stride=2))
         self.fully_connected_1 = nn.Sequential(
             nn.Dropout(0.5),
-            nn.Linear(9216, 4096),
-            activation_function)
+            nn.Linear(6400, 4096),
+            fn)
         self.fully_connected_2 = nn.Sequential(
             nn.Dropout(0.5),
             nn.Linear(4096, 4096),
-            activation_function)
+            fn)
         self.fully_connected_3 = nn.Sequential(
             nn.Linear(4096, num_classes))
 
@@ -64,8 +72,9 @@ class AlexNet(nn.Module):
         x = self.layer_3(x)
         x = self.layer_4(x)
         x = self.layer_5(x)
+
         # flatten here
-        x = torch.flatten(x)
+        x = x.reshape(x.size(0), -1)
         x = self.fully_connected_1(x)
         x = self.fully_connected_2(x)
         x = self.fully_connected_3(x)
@@ -92,12 +101,10 @@ def find_best_model():
     num_classes = 2  # this doesn't ever change either - we're doing binary classification
     learning_rate = config.learning_rate
     epochs = wandb.config.epochs
-    activation_function = nn.ReLU() if config.activation_function == "relu" else nn.LeakyReLU(0.01)
 
     # Create the MLP-based image classifier model
-    model = AlexNet(input_size,
-                    num_classes,
-                    activation_function=activation_function)
+    model = AlexNet(num_classes,
+                    activation_function=config.activation_function)
 
     print('HYPER PARAMETERS:')
     pprint(config)
