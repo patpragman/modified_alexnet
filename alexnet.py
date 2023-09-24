@@ -94,6 +94,14 @@ sweep_id = wandb.sweep(sweep=sweep_config)
 def find_best_model():
     # config for wandb
 
+    if torch.cuda.is_available():
+        device = "cuda"
+    else:
+        if torch.backends.mps.is_available():
+            device = "mps"
+        else:
+            device = "cpu"
+
     # Initialize wandb
     wandb.init(project="AlexNet")
     config = wandb.config
@@ -137,7 +145,7 @@ def find_best_model():
 
     history = train_and_test_model(train_dataloader=train_dataloader, test_dataloader=test_dataloader,
                                    model=model, loss_fn=loss_fn, optimizer=optimizer, epochs=epochs,
-                                   device="cpu", wandb=wandb, verbose=False)
+                                   device=device, wandb=wandb, verbose=False)
 
     y_true, y_pred = history['y_true'], history['y_pred']
     print(classification_report(y_true=y_true, y_pred=y_pred))
