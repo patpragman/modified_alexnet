@@ -137,7 +137,7 @@ def find_best_model():
                                    device="cpu", wandb=wandb, verbose=False)
 
     # save the model
-    model_hash = sha256(str(config))
+    model_hash = sha256(str(config).encode('utf-8'))
     model_name = f"alexnet_{model_hash.hexdigest()}"
     if not os.path.isdir(f"models/{model_name}"):
         os.mkdir(f"models/{model_name}")
