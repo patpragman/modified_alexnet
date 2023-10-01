@@ -181,3 +181,11 @@ if __name__ == "__main__":
     print(f"Run ID: {best_run.id}")
     print(f"Test Accuracy: {best_run.summary['accuracy']}")
     print(f"Hyperparameters: {best_run.config}")
+
+    with open("artisanal_results.md", "w") as write_file:
+        write_file.writelines(
+            ["Best Run:", f"Run ID: {best_run.id}",
+             f"Test Accuracy: {best_run.summary['accuracy']}",
+             f"Hyperparameters: {best_run.config}"
+             ]
+        )

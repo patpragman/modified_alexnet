@@ -1,4 +1,5 @@
 name: alexnet-hyperparam-sweep
+project: AlexNet
 method: grid
 metric:
   name: testing_loss
