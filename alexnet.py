@@ -152,6 +152,7 @@ def find_best_model():
     with open(f"models/{model_name}/report.md", "w") as report_file:
         report_file.writelines(report)
 
+    torch.save(model.state_dict(), f"models/{model_name}.pth")
 
     # Log hyperparameters to wandb
     wandb.log(dict(config))
