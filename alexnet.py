@@ -17,6 +17,7 @@ HOME_DIRECTORY = Path.home()
 SEED = 42  # for consistency - I want all of the models to get the same data
 
 
+
 # Define the architecture of the MLP for image classification
 class AlexNet(nn.Module):
     """
@@ -92,13 +93,12 @@ with open("sweep.yml", "r") as yaml_file:
     sweep_config = yaml.safe_load(yaml_file)
 
 sweep_id = wandb.sweep(sweep=sweep_config)
-
-
 def find_best_model():
-    # config for wandb
 
     # Initialize wandb
+    wandb.init(project='AlexNet')
     config = wandb.config
+
 
     # creating the model stuff
     input_size = config.input_size  # AlexNet only accepts 224 x 224 sized images
@@ -160,11 +160,3 @@ def find_best_model():
 
 if __name__ == "__main__":
     wandb.agent(sweep_id, function=find_best_model)
-
-    # Specify your W&B project and sweep ID
-    project_name = "AlexNet"
-
-    # Fetch sweep runs
-    api = wandb.Api()
-    sweep = api.sweep(f"{project_name}/{sweep_id}")
-    runs = list(sweep.runs)
