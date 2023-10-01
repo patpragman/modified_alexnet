@@ -6,7 +6,7 @@ import pandas as pd
 from torchvision.io import read_image
 import copy
 
-EXCLUDED = [".pth", ".pkl", ".png"]
+EXCLUDED = [".pth", ".pkl", ".png", ".csv"]
 
 class FloatImageDataset(Dataset):
     """floatplane floats image dataset"""
@@ -26,7 +26,7 @@ class FloatImageDataset(Dataset):
             elif score_str == false_folder_name:
                 return 0
             else:
-                raise Exception("score value not found, are you sure the true and false folder names are right?")
+                raise Exception(f"score value not found for file {path}, are you sure the true and false folder names are right?")
 
 
         # if there's a labels file, great, otherwise, build one
@@ -41,6 +41,8 @@ class FloatImageDataset(Dataset):
                 for filename in filenames:
                     full_path = os.path.join(root, filename)
                     if full_path.lower().endswith(tuple(EXCLUDED)):
+                        continue
+                    if filename.lower() == ".ds_store":
                         continue
                     score = onehot(full_path)
                     data['path'].append(full_path)

@@ -1,3 +1,5 @@
+import os.path
+
 import torch
 import torch.nn as nn
 import torch.optim as optim
@@ -9,6 +11,7 @@ from sklearn.metrics import classification_report
 import yaml
 from pprint import pprint
 from pathlib import Path
+from hashlib import sha256
 
 HOME_DIRECTORY = Path.home()
 SEED = 42  # for consistency - I want all of the models to get the same data
@@ -29,7 +32,7 @@ class AlexNet(nn.Module):
 
         if activation_function.lower() == "relu":
             fn = nn.ReLU()
-        elif activation_function.lower == "leaky_relu":
+        elif activation_function.lower() == "leaky_relu":
             fn = nn.LeakyReLU(0.1)
         else:
             fn = nn.Tanh()
@@ -94,16 +97,7 @@ sweep_id = wandb.sweep(sweep=sweep_config)
 def find_best_model():
     # config for wandb
 
-    if torch.cuda.is_available():
-        device = "cuda"
-    else:
-        if torch.backends.mps.is_available():
-            device = "mps"
-        else:
-            device = "cpu"
-
     # Initialize wandb
-    wandb.init(project="AlexNet")
     config = wandb.config
 
     # creating the model stuff
@@ -116,13 +110,8 @@ def find_best_model():
     model = AlexNet(num_classes,
                     activation_function=config.activation_function)
 
-    print('HYPER PARAMETERS:')
-    pprint(config)
-    print('Model Architecture:')
-    print(model)
 
     path = f"{HOME_DIRECTORY}/data/0.35_reduced_then_balanced/data_{config.input_size}"
-
     dataset = FloatImageDataset(directory_path=path,
                                 true_folder_name="entangled", false_folder_name="not_entangled"
                                 )
@@ -145,12 +134,24 @@ def find_best_model():
 
     history = train_and_test_model(train_dataloader=train_dataloader, test_dataloader=test_dataloader,
                                    model=model, loss_fn=loss_fn, optimizer=optimizer, epochs=epochs,
-                                   device=device, wandb=wandb, verbose=False)
+                                   device="cpu", wandb=wandb, verbose=False)
+
+    # save the model
+    model_hash = sha256(str(config))
+    model_name = f"alexnet_{model_hash.hexdigest()}"
+    if not os.path.isdir(f"models/{model_name}"):
+        os.mkdir(f"models/{model_name}")
+
 
     y_true, y_pred = history['y_true'], history['y_pred']
-    print(classification_report(y_true=y_true, y_pred=y_pred))
+    cr = classification_report(y_true=y_true, y_pred=y_pred)
 
-    # Log test accuracy to wandb
+    report = [
+        model_name, cr, str(model)
+    ]
+    with open(f"models/{model_name}/report.md", "w") as report_file:
+        report_file.writelines(report)
+
 
     # Log hyperparameters to wandb
     wandb.log(dict(config))
@@ -166,26 +167,3 @@ if __name__ == "__main__":
     api = wandb.Api()
     sweep = api.sweep(f"{project_name}/{sweep_id}")
     runs = list(sweep.runs)
-
-    # Find the best run based on the metric you care about (e.g., lowest validation loss)
-    best_run = None
-    best_metric_value = float("inf")
-
-    for run in runs:
-        if run.summary["accuracy"] > best_metric_value:
-            best_run = run
-            best_metric_value = run.summary["accuracy"]
-
-    # Print the best run and its hyperparameters
-    print("Best Run:")
-    print(f"Run ID: {best_run.id}")
-    print(f"Test Accuracy: {best_run.summary['accuracy']}")
-    print(f"Hyperparameters: {best_run.config}")
-
-    with open("artisanal_results.md", "w") as write_file:
-        write_file.writelines(
-            ["Best Run:", f"Run ID: {best_run.id}",
-             f"Test Accuracy: {best_run.summary['accuracy']}",
-             f"Hyperparameters: {best_run.config}"
-             ]
-        )
